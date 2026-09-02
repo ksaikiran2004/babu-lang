@@ -15,9 +15,11 @@
 - AST
 - Error handling
 
-## Phase 3 - Execution
+## Phase 3 - Compilation
 
-- Interpreter
+- Semantic Analysis
+- Intermediate Representation
+- Code Generation
 - Variables
 - Strings
 - Numbers
@@ -37,6 +39,8 @@
 
 ## Phase 6 - Future
 
-- Compiler
 - Package Manager
 - IDE Support
+- Language Server
+- Optimizations
+- Additional Backends

@@ -15,10 +15,13 @@ Development Environment: GitHub Codespaces
 ## D-005
 Project Type: Programming Language
 
+## D-006
+
+Execution Strategy: Compiler First
+
 ## Pending Decisions
 
 - Language Philosophy
 - Syntax Style
 - Type System
 - Keywords
-- Interpreter vs Compiler Strategy

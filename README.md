@@ -4,18 +4,48 @@ Babu is an experimental, Telugu-inspired programming language designed to explor
 
 ## Current status
 
-Babu is in the Language Design stage. The repository contains initial project documentation and a small example, but the language is not yet implemented and is not production-ready.
+Babu is experimental. The repository includes a small C++17 interpreter MVP
+for a deliberately provisional subset of the language; it is not production-ready.
 
 Established direction:
 - Language name: Babu
 - Implementation language: C++
 - Development environment: GitHub Codespaces
 - Execution strategy: Compiler First
-- Current phase: Language Design
 
-This project is experimental and intended to evolve through design review before implementation begins.
+The exact MVP syntax is documented separately in
+[docs/mvp-syntax.md](docs/mvp-syntax.md). It is not approved language design and
+does not settle the open syntax questions in the specification.
 
-The current milestone is **Language Specification development**. The [language specification](docs/language-specification.md) records confirmed decisions separately from provisional recommendations and unresolved questions; exact syntax and keywords remain under maintainer control. See the [roadmap](docs/roadmap.md) for project milestones.
+## Build and run the MVP
+
+The only build prerequisite is a C++17 compiler such as `g++` and GNU Make,
+both available in GitHub Codespaces. From the repository root:
+
+```sh
+make
+./babu examples/hello.babu
+make test
+```
+
+`make` builds the `babu` executable. It accepts one `.babu` source file and
+prints output to the terminal. `make test` runs the end-to-end MVP tests.
+
+The MVP supports string and numeric literals, inferred mutable variables,
+integer and floating-point arithmetic, string concatenation, `chupi(...)`
+output, semicolon-terminated statements, and brace-delimited statement groups.
+It preserves UTF-8 string contents, including Telugu. Static type consistency
+is checked for variable reassignment and expression operations, with
+file/line/column diagnostics.
+
+It does not implement constants, explicit declarations or type annotations,
+conditions, loops, functions, imports, or native-code compilation. The
+interpreter evaluates the supported syntax directly.
+
+The [language specification](docs/language-specification.md) records confirmed
+decisions separately from provisional recommendations and unresolved questions;
+exact syntax and keywords remain under maintainer control. See the
+[roadmap](docs/roadmap.md) for the broader project direction.
 
 ## Purpose and vision
 
@@ -65,20 +95,16 @@ These principles and boundaries are now recorded as the approved design foundati
 - [docs/roadmap.md](docs/roadmap.md) — current design and implementation roadmap
 - [docs/project-brief.md](docs/project-brief.md) — short project summary and current milestone
 
-## Current implementation status
+## Design status
 
-Babu does not yet include:
-- a lexer or parser
-- a compiler or interpreter
-- a complete syntax or grammar
-- finalized keywords or detailed type-system rules
-- a runtime, backend, or standard library specification
-
-The repository is intentionally documentation-first at this stage.
+The language specification and decisions document remain authoritative for
+approved design. The MVP makes narrow implementation choices only; see
+[docs/mvp-syntax.md](docs/mvp-syntax.md) for their provisional status and
+limitations.
 
 ## Notes
 
-- The sample program in [examples/hello.babu](examples/hello.babu) is an example artifact and not a normative language specification.
+- The sample program in [examples/hello.babu](examples/hello.babu) demonstrates MVP behavior and is not a normative language specification.
 - Keyword design, syntax decisions, and implementation choices remain subject to explicit maintainer review.
 - This project is experimental and should not be treated as production-ready software.
 

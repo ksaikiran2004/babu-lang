@@ -28,6 +28,26 @@ Syntax Direction: Follow Python as closely as practical for readability and simp
 ### D-008
 Type System Direction: Static typing with compile-time type inference.
 
+### D-009
+Variable Mutability: Variables are mutable by default.
+
+### D-010
+Constants: Constants will be supported from the first version and use binding immutability: a constant cannot be reassigned after initialization, but an object or collection referenced by it may still be mutable. Deep immutability is not part of this decision and remains a possible future design topic.
+
+### D-011
+Uninitialized Variables: An uninitialized variable must have an explicit type or another reliable way for the compiler to determine its type. Exact syntax and the criteria for reliable type determination remain unresolved.
+
+## Proposed primitive-type baseline (not approved)
+
+The following recommendations are a proposed v1 direction for review, not established decisions. See the [language specification](language-specification.md) for trade-offs and unresolved details.
+
+- Initial numeric categories: integer and floating-point; recommend arbitrary-precision integers by default and one standard floating-point type initially.
+- Include built-in text and boolean types; text supports Unicode, including Telugu.
+- Do not include a separate character type initially; individual characters are represented as strings.
+- Recommend Unicode code-point-based string indexing initially.
+- Defer optional types until the core type system is stable.
+- Static typing with compile-time type inference remains an approved decision recorded in D-008; this proposal does not change its status.
+
 ## Approved language philosophy
 
 The following principles are now approved for Babu:
@@ -64,7 +84,7 @@ The following areas remain unresolved and must be decided deliberately before im
 
 - Further design decisions beyond the approved language philosophy and boundaries
 - Keywords and reserved words
-- Detailed type-system rules
+- Primitive-type recommendations and detailed type-system rules
 - Scope and name-resolution rules
 - Memory model and runtime assumptions
 - Compiler architecture and intermediate representation strategy

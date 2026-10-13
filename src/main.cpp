@@ -7,12 +7,15 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace {
 
@@ -27,7 +30,8 @@ struct LanguageError : std::runtime_error {
 
 enum class TokenType {
     End, Identifier, Number, String, LeftParen, RightParen, LeftBrace,
-    RightBrace, Semicolon, Plus, Minus, Star, Slash, Percent, Equal
+    RightBrace, Semicolon, Comma, Colon, Arrow, Plus, Minus, Star, Slash,
+    Percent, Equal
 };
 
 struct Token {
@@ -35,23 +39,29 @@ struct Token {
     std::string text;
     std::size_t line;
     std::size_t column;
+    std::size_t startOffset = 0;
+    std::size_t endOffset = 0;
 };
 
 class Lexer {
 public:
-    explicit Lexer(const std::string& source) : source_(source) {}
+    explicit Lexer(const std::string& source, std::size_t initialLine = 1,
+                   std::size_t initialColumn = 1)
+        : source_(source), line_(initialLine), column_(initialColumn) {}
 
     Token next() {
         skipWhitespace();
         const std::size_t tokenLine = line_;
         const std::size_t tokenColumn = column_;
+        const std::size_t tokenStart = offset_;
         if (atEnd()) return {TokenType::End, "", tokenLine, tokenColumn};
 
         const char current = advance();
         if (isIdentifierStart(current)) {
             std::string text(1, current);
             while (!atEnd() && isIdentifierPart(peek())) text += advance();
-            return {TokenType::Identifier, text, tokenLine, tokenColumn};
+                return {TokenType::Identifier, text, tokenLine, tokenColumn,
+                    tokenStart, offset_};
         }
         if (std::isdigit(static_cast<unsigned char>(current))) {
             std::string text(1, current);
@@ -66,22 +76,56 @@ public:
                     text += advance();
                 }
             }
-            return {TokenType::Number, text, tokenLine, tokenColumn};
+                return {TokenType::Number, text, tokenLine, tokenColumn,
+                    tokenStart, offset_};
         }
-        if (current == '"') return readString(tokenLine, tokenColumn);
+            if (current == '"') return readString(tokenLine, tokenColumn, tokenStart);
 
         switch (current) {
-        case '(': return {TokenType::LeftParen, "(", tokenLine, tokenColumn};
-        case ')': return {TokenType::RightParen, ")", tokenLine, tokenColumn};
-        case '{': return {TokenType::LeftBrace, "{", tokenLine, tokenColumn};
-        case '}': return {TokenType::RightBrace, "}", tokenLine, tokenColumn};
-        case ';': return {TokenType::Semicolon, ";", tokenLine, tokenColumn};
-        case '+': return {TokenType::Plus, "+", tokenLine, tokenColumn};
-        case '-': return {TokenType::Minus, "-", tokenLine, tokenColumn};
-        case '*': return {TokenType::Star, "*", tokenLine, tokenColumn};
-        case '/': return {TokenType::Slash, "/", tokenLine, tokenColumn};
-        case '%': return {TokenType::Percent, "%", tokenLine, tokenColumn};
-        case '=': return {TokenType::Equal, "=", tokenLine, tokenColumn};
+            case '(':
+                return {TokenType::LeftParen, "(", tokenLine, tokenColumn,
+                    tokenStart, offset_};
+            case ')':
+                return {TokenType::RightParen, ")", tokenLine, tokenColumn,
+                    tokenStart, offset_};
+            case '{':
+                return {TokenType::LeftBrace, "{", tokenLine, tokenColumn,
+                    tokenStart, offset_};
+            case '}':
+                return {TokenType::RightBrace, "}", tokenLine, tokenColumn,
+                    tokenStart, offset_};
+            case ';':
+                return {TokenType::Semicolon, ";", tokenLine, tokenColumn,
+                    tokenStart, offset_};
+            case ',':
+                return {TokenType::Comma, ",", tokenLine, tokenColumn,
+                    tokenStart, offset_};
+            case ':':
+                return {TokenType::Colon, ":", tokenLine, tokenColumn,
+                    tokenStart, offset_};
+            case '+':
+                return {TokenType::Plus, "+", tokenLine, tokenColumn,
+                    tokenStart, offset_};
+            case '-':
+                if (!atEnd() && peek() == '>') {
+                advance();
+                return {TokenType::Arrow, "->", tokenLine, tokenColumn,
+                    tokenStart, offset_};
+                }
+                return {TokenType::Minus, "-", tokenLine, tokenColumn,
+                    tokenStart, offset_};
+            case '*':
+                return {TokenType::Star, "*", tokenLine, tokenColumn,
+                    tokenStart, offset_};
+            case '/':
+                return {TokenType::Slash, "/", tokenLine, tokenColumn,
+                    tokenStart, offset_};
+            case '%':
+                return {TokenType::Percent, "%", tokenLine, tokenColumn,
+                    tokenStart, offset_};
+            case '=':
+                return {TokenType::Equal, "=", tokenLine, tokenColumn,
+                    tokenStart, offset_};
         default:
             throw LanguageError(tokenLine, tokenColumn,
                                 "unexpected character");
@@ -127,7 +171,8 @@ private:
         return std::isalnum(byte) || value == '_';
     }
 
-    Token readString(std::size_t tokenLine, std::size_t tokenColumn) {
+    Token readString(std::size_t tokenLine, std::size_t tokenColumn,
+                     std::size_t tokenStart) {
         std::string value;
         while (!atEnd() && peek() != '"') {
             const char character = advance();
@@ -155,16 +200,47 @@ private:
             throw LanguageError(tokenLine, tokenColumn, "unterminated string");
         }
         advance();
-        return {TokenType::String, value, tokenLine, tokenColumn};
+        return {TokenType::String, value, tokenLine, tokenColumn,
+            tokenStart, offset_};
     }
 };
 
 using Value = std::variant<std::int64_t, double, std::string>;
+using Environment = std::unordered_map<std::string, Value>;
+
+struct Parameter {
+    std::string name;
+    std::string type;
+    std::size_t line;
+    std::size_t column;
+};
+
+struct Function {
+    std::string name;
+    std::vector<Parameter> parameters;
+    std::optional<std::string> returnType;
+    std::string body;
+    Environment globals;
+    std::unordered_set<std::string> constants;
+    std::size_t line;
+    std::size_t column;
+    std::size_t bodyLine;
+    std::size_t bodyColumn;
+    bool checking = false;
+};
+
+using FunctionMap = std::unordered_map<std::string, Function>;
 
 std::string typeName(const Value& value) {
     if (std::holds_alternative<std::int64_t>(value)) return "integer";
     if (std::holds_alternative<double>(value)) return "float";
     return "string";
+}
+
+Value sampleValue(const std::string& type) {
+    if (type == "integer") return std::int64_t{1};
+    if (type == "float") return 1.0;
+    return std::string("sample");
 }
 
 std::string display(const Value& value) {
@@ -181,18 +257,39 @@ std::string display(const Value& value) {
 
 class Parser {
 public:
-    Parser(const std::string& source, std::ostream& output)
-        : lexer_(source), output_(output), current_(lexer_.next()) {}
+    Parser(const std::string& source, std::ostream& output,
+           FunctionMap& functions, Environment variables = {},
+           bool functionBody = false, bool validationMode = false,
+              std::optional<std::string> expectedReturnType = std::nullopt,
+              std::size_t sourceLine = 1, std::size_t sourceColumn = 1,
+              std::unordered_set<std::string> constants = {})
+          : source_(source), lexer_(source, sourceLine, sourceColumn), output_(output), functions_(functions),
+          variables_(std::move(variables)), functionBody_(functionBody),
+          validationMode_(validationMode),
+          expectedReturnType_(std::move(expectedReturnType)),
+          current_(lexer_.next()), constants_(std::move(constants)) {}
 
-    void run() {
-        while (current_.type != TokenType::End) statement();
+    std::optional<Value> run() {
+        while (current_.type != TokenType::End && !returnValue_) statement();
+        if (functionBody_ && !returnValue_) {
+            throw LanguageError(current_.line, current_.column,
+                                "function must return a value");
+        }
+        return returnValue_;
     }
 
 private:
+    const std::string& source_;
     Lexer lexer_;
     std::ostream& output_;
+    FunctionMap& functions_;
+    Environment variables_;
+    bool functionBody_;
+    bool validationMode_;
+    std::optional<std::string> expectedReturnType_;
     Token current_;
-    std::unordered_map<std::string, Value> variables_;
+    std::optional<Value> returnValue_;
+    std::unordered_set<std::string> constants_;
 
     void advance() { current_ = lexer_.next(); }
 
@@ -209,6 +306,7 @@ private:
         if (current_.type == TokenType::LeftBrace) {
             advance();
             while (current_.type != TokenType::RightBrace) {
+                if (returnValue_) return;
                 if (current_.type == TokenType::End) {
                     throw LanguageError(current_.line, current_.column,
                                         "expected '}' to close block");
@@ -224,19 +322,58 @@ private:
         }
 
         const Token name = consume(TokenType::Identifier,
-                                   "expected an assignment or chupi output");
+                                   "expected an assignment, function, or chupi output");
+        if (name.text == "kriya" || name.text == "fun") {
+            if (functionBody_) {
+                throw LanguageError(name.line, name.column,
+                                    "nested function declarations are not supported");
+            }
+            functionDeclaration(name);
+            return;
+        }
+        if (name.text == "pampu" || name.text == "return") {
+            if (!functionBody_) {
+                throw LanguageError(name.line, name.column,
+                                    "return is only valid inside a function");
+            }
+            const Value value = expression();
+            consume(TokenType::Semicolon, "expected ';' after statement");
+            if (expectedReturnType_ &&
+                typeName(value) != *expectedReturnType_) {
+                throw LanguageError(name.line, name.column,
+                                    "function must return " + *expectedReturnType_ +
+                                        ", got " + typeName(value));
+            }
+            returnValue_ = value;
+            return;
+        }
         if (name.text == "chupi") {
             consume(TokenType::LeftParen, "expected '(' after chupi");
             const Value value = expression();
+            if (!validationMode_) output_ << display(value);
+            while (current_.type == TokenType::Comma) {
+                advance();
+                const Value nextValue = expression();
+                if (!validationMode_) output_ << display(nextValue);
+            }
             consume(TokenType::RightParen, "expected ')' after output value");
             consume(TokenType::Semicolon, "expected ';' after statement");
-            output_ << display(value) << '\n';
+            if (!validationMode_) output_ << '\n';
+            return;
+        }
+
+        if (name.text == "astiram" || name.text == "stiram") {
+            variableDeclaration(name, name.text == "stiram");
             return;
         }
 
         consume(TokenType::Equal, "expected '=' after variable name");
         const Value value = expression();
         consume(TokenType::Semicolon, "expected ';' after statement");
+        if (constants_.find(name.text) != constants_.end()) {
+            throw LanguageError(name.line, name.column,
+                                "cannot reassign constant '" + name.text + "'");
+        }
         const auto existing = variables_.find(name.text);
         if (existing != variables_.end() &&
             typeName(existing->second) != typeName(value)) {
@@ -246,6 +383,117 @@ private:
                                     " variable '" + name.text + "'");
         }
         variables_[name.text] = value;
+    }
+
+    void variableDeclaration(const Token& keyword, bool constant) {
+        const Token name = consume(TokenType::Identifier,
+                                   "expected variable name after '" +
+                                       keyword.text + "'");
+        if (variables_.find(name.text) != variables_.end()) {
+            throw LanguageError(name.line, name.column,
+                                "variable '" + name.text + "' is already defined");
+        }
+        consume(TokenType::Equal, "expected '=' after variable name");
+        const Value value = expression();
+        consume(TokenType::Semicolon, "expected ';' after statement");
+        variables_[name.text] = value;
+        if (constant) constants_.insert(name.text);
+    }
+
+    std::string parseType() {
+        const Token type = consume(TokenType::Identifier,
+                                   "expected a parameter or return type");
+        if (type.text != "integer" && type.text != "float" &&
+            type.text != "string") {
+            throw LanguageError(type.line, type.column,
+                                "unknown type '" + type.text + "'");
+        }
+        return type.text;
+    }
+
+    void functionDeclaration(const Token& keyword) {
+        const Token name = consume(TokenType::Identifier,
+                       "expected function name after 'kriya'");
+        if (functions_.find(name.text) != functions_.end()) {
+            throw LanguageError(name.line, name.column,
+                                "function '" + name.text + "' is already defined");
+        }
+        consume(TokenType::LeftParen, "expected '(' after function name");
+        std::vector<Parameter> parameters;
+        if (current_.type != TokenType::RightParen) {
+            do {
+                const Token parameter = consume(TokenType::Identifier,
+                                                "expected parameter name");
+                consume(TokenType::Colon, "expected ':' after parameter name");
+                const std::string type = parseType();
+                for (const auto& existing : parameters) {
+                    if (existing.name == parameter.text) {
+                        throw LanguageError(parameter.line, parameter.column,
+                                            "duplicate parameter '" +
+                                                parameter.text + "'");
+                    }
+                }
+                parameters.push_back({parameter.text, type, parameter.line,
+                                      parameter.column});
+                if (current_.type != TokenType::Comma) break;
+                advance();
+            } while (true);
+        }
+        consume(TokenType::RightParen, "expected ')' after parameters");
+
+        std::optional<std::string> returnType;
+        if (current_.type == TokenType::Arrow) {
+            advance();
+            returnType = parseType();
+        }
+        const Token openingBrace = consume(TokenType::LeftBrace,
+                                           "expected '{' before function body");
+        std::size_t depth = 1;
+        std::size_t bodyEnd = openingBrace.endOffset;
+        while (depth > 0) {
+            if (current_.type == TokenType::End) {
+                throw LanguageError(current_.line, current_.column,
+                                    "expected '}' to close function body");
+            }
+            if (current_.type == TokenType::LeftBrace) ++depth;
+            if (current_.type == TokenType::RightBrace) {
+                --depth;
+                if (depth == 0) bodyEnd = current_.startOffset;
+            }
+            advance();
+        }
+
+        Function function{name.text, std::move(parameters), returnType,
+                          source_.substr(openingBrace.endOffset,
+                                         bodyEnd - openingBrace.endOffset),
+                  variables_, constants_, keyword.line, keyword.column,
+                          openingBrace.line, openingBrace.column + 1, true};
+        auto [entry, inserted] = functions_.emplace(name.text, std::move(function));
+        (void)inserted;
+
+        Environment sampleEnvironment = entry->second.globals;
+        for (const auto& parameter : entry->second.parameters) {
+            sampleEnvironment[parameter.name] = sampleValue(parameter.type);
+        }
+        Parser validator(entry->second.body, output_, functions_,
+                         std::move(sampleEnvironment), true, true,
+                         entry->second.returnType, entry->second.bodyLine,
+                         entry->second.bodyColumn, entry->second.constants);
+        const auto result = validator.run();
+        if (!result) {
+            throw LanguageError(keyword.line, keyword.column,
+                                "function must return a value");
+        }
+        const std::string inferredType = typeName(*result);
+        if (entry->second.returnType &&
+            *entry->second.returnType != inferredType) {
+            throw LanguageError(keyword.line, keyword.column,
+                                "function returns " + inferredType +
+                                    " but declares " +
+                                    *entry->second.returnType);
+        }
+        entry->second.returnType = inferredType;
+        entry->second.checking = false;
     }
 
     Value expression() { return addition(); }
@@ -280,6 +528,7 @@ private:
             Value value = unary();
             if (auto* integer = std::get_if<std::int64_t>(&value)) {
                 if (*integer == std::numeric_limits<std::int64_t>::min()) {
+                    if (validationMode_) return std::int64_t{0};
                     throw LanguageError(operation.line, operation.column,
                                         "integer overflow");
                 }
@@ -290,6 +539,73 @@ private:
                                 "unary '-' requires a number");
         }
         return primary();
+    }
+
+    Value callFunction(const Token& name) {
+        consume(TokenType::LeftParen, "expected '(' after function name");
+        std::vector<Value> arguments;
+        if (current_.type != TokenType::RightParen) {
+            do {
+                arguments.push_back(expression());
+                if (current_.type != TokenType::Comma) break;
+                advance();
+            } while (true);
+        }
+        consume(TokenType::RightParen, "expected ')' after arguments");
+
+        const auto found = functions_.find(name.text);
+        if (found == functions_.end()) {
+            throw LanguageError(name.line, name.column,
+                                "undefined function '" + name.text + "'");
+        }
+        Function& function = found->second;
+        if (arguments.size() != function.parameters.size()) {
+            throw LanguageError(name.line, name.column,
+                                "function '" + name.text + "' expects " +
+                                    std::to_string(function.parameters.size()) +
+                                    " arguments, got " +
+                                    std::to_string(arguments.size()));
+        }
+
+        Environment localVariables = function.globals;
+        for (std::size_t index = 0; index < arguments.size(); ++index) {
+            const Parameter& parameter = function.parameters[index];
+            const std::string argumentType = typeName(arguments[index]);
+            if (argumentType != parameter.type) {
+                throw LanguageError(name.line, name.column,
+                                    "argument " + std::to_string(index + 1) +
+                                        " of '" + name.text + "' must be " +
+                                        parameter.type + ", got " + argumentType);
+            }
+            localVariables[parameter.name] = arguments[index];
+        }
+
+        if (function.checking) {
+            if (!function.returnType) {
+                throw LanguageError(name.line, name.column,
+                                    "recursive function '" + name.text +
+                                        "' needs an explicit return type");
+            }
+            return sampleValue(*function.returnType);
+        }
+
+        Parser invocation(function.body, output_, functions_,
+                          std::move(localVariables), true, validationMode_,
+                          function.returnType, function.bodyLine,
+                          function.bodyColumn, function.constants);
+        const auto result = invocation.run();
+        if (!result) {
+            throw LanguageError(name.line, name.column,
+                                "function '" + name.text +
+                                    "' did not return a value");
+        }
+        if (function.returnType && typeName(*result) != *function.returnType) {
+            throw LanguageError(name.line, name.column,
+                                "function '" + name.text + "' returned " +
+                                    typeName(*result) + ", expected " +
+                                    *function.returnType);
+        }
+        return *result;
     }
 
     Value primary() {
@@ -322,6 +638,7 @@ private:
         if (current_.type == TokenType::Identifier) {
             const Token name = current_;
             advance();
+            if (current_.type == TokenType::LeftParen) return callFunction(name);
             const auto value = variables_.find(name.text);
             if (value == variables_.end()) {
                 throw LanguageError(name.line, name.column,
@@ -379,6 +696,7 @@ private:
                 break;
             case TokenType::Percent:
                 if (second == 0) {
+                    if (validationMode_) return std::int64_t{0};
                     throw LanguageError(operation.line, operation.column,
                                         "division by zero");
                 }
@@ -389,6 +707,7 @@ private:
             default: break;
             }
             if (overflow) {
+                if (validationMode_) return std::int64_t{0};
                 throw LanguageError(operation.line, operation.column,
                                     "integer overflow");
             }
@@ -402,6 +721,7 @@ private:
                                   ? static_cast<double>(std::get<std::int64_t>(right))
                                   : std::get<double>(right);
         if ((operation.type == TokenType::Slash) && second == 0.0) {
+            if (validationMode_) return 0.0;
             throw LanguageError(operation.line, operation.column,
                                 "division by zero");
         }
@@ -434,7 +754,8 @@ int main(int argc, char** argv) {
     const std::string source((std::istreambuf_iterator<char>(sourceFile)),
                              std::istreambuf_iterator<char>());
     try {
-        Parser parser(source, std::cout);
+        FunctionMap functions;
+        Parser parser(source, std::cout, functions);
         parser.run();
     } catch (const LanguageError& error) {
         std::cerr << filename << ':' << error.line << ':' << error.column

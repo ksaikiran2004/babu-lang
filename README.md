@@ -24,23 +24,30 @@ both available in GitHub Codespaces. From the repository root:
 
 ```sh
 make
-./babu examples/hello.babu
+./babu examples/greeting.babu
+./babu examples/addition.babu
 make test
 ```
 
 `make` builds the `babu` executable. It accepts one `.babu` source file and
-prints output to the terminal. `make test` runs the end-to-end MVP tests.
+ prints output to the terminal. The greeting command prints `Namaste
+ Hyderabad`; the addition command prints `7 + 5 = 12`. `make test` runs the
+ complete regression and demo suite.
 
 The MVP supports string and numeric literals, inferred mutable variables,
-integer and floating-point arithmetic, string concatenation, `chupi(...)`
-output, semicolon-terminated statements, and brace-delimited statement groups.
-It preserves UTF-8 string contents, including Telugu. Static type consistency
-is checked for variable reassignment and expression operations, with
-file/line/column diagnostics.
+ The MVP supports string and numeric literals, inferred mutable declarations
+ with `astiram`, constants with `stiram`, `kriya` functions and `pampu` returns,
+ integer and floating-point arithmetic, string concatenation, and `chupi(...)`
+ output. Statements use semicolons and blocks use braces. It preserves UTF-8
+ string contents, including Telugu. Static type consistency is checked for
+ variable reassignment and expression operations, with file/line/column
+ diagnostics. Function parameter and return syntax and multi-value output remain
+ provisional; details are in [docs/mvp-syntax.md](docs/mvp-syntax.md).
 
-It does not implement constants, explicit declarations or type annotations,
-conditions, loops, functions, imports, or native-code compilation. The
-interpreter evaluates the supported syntax directly.
+ It does not implement explicit type annotations for variables, conditions,
+ loops, imports, or native-code compilation. The interpreter evaluates the
+ supported syntax directly. Older provisional `fun`, `return`, and implicit
+ first-assignment forms remain supported for existing programs.
 
 The [language specification](docs/language-specification.md) records confirmed
 decisions separately from provisional recommendations and unresolved questions;

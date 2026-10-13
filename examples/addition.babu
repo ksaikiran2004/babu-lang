@@ -1,0 +1,4 @@
+astiram a = 7;
+astiram b = 5;
+astiram c = a + b;
+chupi(a, " + ", b, " = ", c);
